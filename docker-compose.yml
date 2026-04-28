@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: smc_postgres
+    environment:
+      POSTGRES_USER: smc_user
+      POSTGRES_PASSWORD: smc_password
+      POSTGRES_DB: smc_dashboard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smc_user -d smc_dashboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smc_backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://smc_user:smc_password@postgres:5432/smc_dashboard
+      HOST: 0.0.0.0
+      PORT: 8000
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      SCAN_INTERVAL_SECONDS: 60
+      WATCHLIST: BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT
+      MIN_SCORE_TO_EMIT: 40
+      BINANCE_DEMO_API_KEY: ${BINANCE_DEMO_API_KEY}
+      BINANCE_DEMO_API_SECRET: ${BINANCE_DEMO_API_SECRET}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
